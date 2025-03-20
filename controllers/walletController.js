@@ -78,3 +78,23 @@ exports.getWallets = async (req, res) => {
 //         res.status(500).json({ message: "Server error", error: error.message });
 //     }
 // };
+
+exports.deleteWallet = async (req, res) => {
+    try {
+        const { walletId } = req.params; // Get wallet ID from request params
+        const userId = req.user.userId; // Get user ID from authenticated request
+
+        // Find the wallet that belongs to the user
+        const wallet = await Wallet.findOne({ _id: walletId, user: userId });
+        if (!wallet) {
+            return res.status(404).json({ message: "Wallet not found or not authorized to delete." });
+        }
+
+        // Delete the wallet
+        await Wallet.findByIdAndDelete(walletId);
+
+        res.status(200).json({ message: "Wallet deleted successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
