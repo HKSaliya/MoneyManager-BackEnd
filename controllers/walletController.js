@@ -1,5 +1,6 @@
 const Wallet = require("../models/wallet"); // Import the new Wallet model
 const User = require("../models/user"); // Import User model
+const transaction = require("../models/transaction");
 
 // Add a new wallet
 exports.addWallet = async (req, res) => {
@@ -96,5 +97,56 @@ exports.deleteWallet = async (req, res) => {
         res.status(200).json({ message: "Wallet deleted successfully." });
     } catch (error) {
         res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+// Function to get the wallet balance at the end of each day for the last 7 days
+exports.getLastWeekBalances = async (req, res) => {
+    try {
+        const { walletId } = req.params; // Get wallet ID from request params
+
+        // Fetch wallet details to get the latest balance
+        const wallet = await Wallet.findById(walletId);
+        if (!wallet) {
+            return res.status(404).json({ error: "Wallet not found" });
+        }
+
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // Set to end of today
+
+        let balances = [];
+        let lastKnownBalance = wallet.balance; // Start with current wallet balance
+
+        for (let i = 5; i >= 0; i--) {
+            // Set up date range for the day
+            let date = new Date();
+            date.setDate(today.getDate() - i);
+            date.setHours(0, 0, 0, 0); // Start of the day
+            let endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999); // End of the day
+
+            // Find the last transaction of the day
+            const lastTransaction = await transaction.findOne({
+                wallet: walletId,
+                date: { $gte: date, $lte: endOfDay }
+            })
+                .sort({ date: -1 }) // Get the last transaction of the day
+                .lean(); // Convert Mongoose document to plain object
+
+            if (lastTransaction) {
+                lastKnownBalance -= lastTransaction.amount; // Subtract transaction amount
+            }
+
+            // Store date and balance
+            balances.push({
+                date: date.toISOString().split("T")[0], // Format YYYY-MM-DD
+                balance: lastKnownBalance
+            });
+        }
+
+        return res.json(balances); // Send response to the client
+    } catch (error) {
+        console.error("Error fetching wallet balances:", error);
+        return res.status(500).json({ error: "Internal Server Error" });
     }
 };
